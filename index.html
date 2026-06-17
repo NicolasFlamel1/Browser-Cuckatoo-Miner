@@ -726,8 +726,12 @@
 								// Clear first connect
 								firstConnect = false;
 								
-								// Display message
-								console.log("You can view all the stratum server communication in your browser's console");
+								// Check if not using a mobile browser
+								if(IS_MOBILE === false) {
+								
+									// Display message
+									console.log("You can view all the stratum server communication in your browser's console");
+								}
 							}
 							
 							// Display message
@@ -946,8 +950,18 @@
 										// Check if logged in and message is a get job template response or a job has already been received
 										if(loggedIn === true && (message.method === "getjobtemplate" || receivedJob === true)) {
 										
-											// Check if message doesn't contain job info
-											if((message.method === "getjobtemplate" && "result" in message === false) || (message.method === "job" && "params" in message === false)) {
+											// Check if message is a get job template response and a job has already been received
+											if(message.method === "getjobtemplate" && receivedJob === true) {
+											
+												// Display message
+												console.log("Received an invalid message from the stratum server");
+												
+												// Close stratum server
+												stratumServer.close();
+											}
+											
+											// Otherwise check if message doesn't contain job info
+											else if((message.method === "getjobtemplate" && "result" in message === false) || (message.method === "job" && "params" in message === false)) {
 											
 												// Display message
 												console.log("Received an invalid message from the stratum server");
@@ -995,9 +1009,6 @@
 												// Otherwise
 												else {
 												
-													// Set received job
-													receivedJob = true;
-													
 													// Set job header to the job info's pre-proof of work
 													jobHeader.set(Uint8Array.fromHex(jobInfo.pre_pow));
 													
@@ -1013,8 +1024,14 @@
 													// Check if message is a get job template response
 													if(message.method === "getjobtemplate") {
 													
+														// Set received job
+														receivedJob = true;
+														
 														// Display message
 														console.log("Received a job from the stratum server");
+														
+														// Resolve
+														resolve();
 													}
 													
 													// Otherwise
@@ -1023,9 +1040,6 @@
 														// Display message
 														console.log("Received a new job from the stratum server");
 													}
-													
-													// Resolve
-													resolve();
 												}
 											}
 										}

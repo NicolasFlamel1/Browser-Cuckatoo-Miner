@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>Browser Cuckatoo Miner/v0.0.1</title>
+	
+	<style>
+		html {
+			display: flex;
+		}
+		
+		body {
+			margin: 0;
+		}
+	</style>
+</head>
+<body>
+	<script src="blake2b.js"></script>
+	<script>
+	
+		// Use strict
+		"use strict";
+		
+		
+		// Configurable constants
+		
+		// Edge bits
+		const EDGE_BITS = 31;
+		
+		// Trimming rounds
+		const TRIMMING_ROUNDS = 120;
+		
+		// Trimming type
+		const TRIMMING_TYPE = "lean";
+		
+		// Request high performance GPU
+		const REQUEST_HIGH_PERFORMANCE_GPU = true;
+		
+		// Initial job nonce
+		const INITIAL_JOB_NONCE = 0n;
+		
+		// Units max number of decimal numbers
+		const UNITS_MAX_NUMBER_OF_DECIMAL_NUMBERS = 3;
+		
+		// Stratum server address
+		const STRATUM_SERVER_ADDRESS = "wss://mwcwallet.com/stratum_server";
+		
+		// Stratum server username
+		const STRATUM_SERVER_USERNAME = "nicolas_flamel";
+		
+		// Stratum server password
+		const STRATUM_SERVER_PASSWORD = "";
+		
+		// Stratum server agent
+		const STRATUM_SERVER_AGENT = document.title;
+		
+		// Stratum server reconnect delay seconds
+		const STRATUM_SERVER_RECONNECT_DELAY_SECONDS = 5;
+		
+		// Stratum server keep alive interval seconds
+		const STRATUM_SERVER_KEEP_ALIVE_INTERVAL_SECONDS = 10;
+		
+		
+		// Constants
+		
+		// Bits in a byte
+		const BITS_IN_A_BYTE = 8;
+		
+		// Bytes in a kilobyte
+		const BYTES_IN_A_KILOBYTE = 1024;
+		
+		// Kilobytes in a megabyte
+		const KILOBYTES_IN_A_MEGABYTE = 1024;
+		
+		// Megabytes in a gigabyte
+		const MEGABYTES_IN_A_GIGABYTE = 1024;
+		
+		// Uint32 max
+		const UINT32_MAX = 0xFFFFFFFF;
+		
+		// Uint64 max
+		const UINT64_MAX = 0xFFFFFFFFFFFFFFFFn;
+		
+		// Secp256k1 private key size
+		const SECP256K1_PRIVATE_KEY_SIZE = 32;
+		
+		// Header size
+		const HEADER_SIZE = Uint16Array.BYTES_PER_ELEMENT + BigUint64Array.BYTES_PER_ELEMENT + BigInt64Array.BYTES_PER_ELEMENT + Blake2b.DEFAULT_OUTPUT_SIZE + Blake2b.DEFAULT_OUTPUT_SIZE + Blake2b.DEFAULT_OUTPUT_SIZE + Blake2b.DEFAULT_OUTPUT_SIZE + Blake2b.DEFAULT_OUTPUT_SIZE + SECP256K1_PRIVATE_KEY_SIZE + BigUint64Array.BYTES_PER_ELEMENT + BigUint64Array.BYTES_PER_ELEMENT + BigUint64Array.BYTES_PER_ELEMENT + Uint32Array.BYTES_PER_ELEMENT;
+		
+		// Number of edges
+		const NUMBER_OF_EDGES = Math.pow(2, EDGE_BITS);
+		
+		// Solution size
+		const SOLUTION_SIZE = 42;
+		
+		// Max number of edges after trimming
+		const MAX_NUMBER_OF_EDGES_AFTER_TRIMMING = Math.ceil(NUMBER_OF_EDGES / (Math.floor((TRIMMING_ROUNDS + 1) / 2) * Math.floor((TRIMMING_ROUNDS + 1) / 2) + 2) - 1);
+		
+		// Edge number of components
+		const EDGE_NUMBER_OF_COMPONENTS = 3;
+		
+		// Milliseconds in a second
+		const MILLISECONDS_IN_A_SECOND = 1000;
+		
+		// Is mobile
+		const IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) === true;
+		
+		
+		// Classes
+		
+		// Node connection class
+		class NodeConnection {
+		
+			// Constructor
+			constructor() {
+			
+				// Initialize previous node connection index
+				this.previousNodeConnectionIndex = undefined;
+				
+				// Initialize node
+				this.node = 0;
+				
+				// Initialize edge index
+				this.edgeIndex = 0;
+			}
+		}
+		
+		
+		// Main function
+		
+		// Override console log
+		const originalConsoleLog = console.log;
+		console.log = (text) => {
+		
+			// Perform original console log
+			originalConsoleLog(text);
+			
+			// Create message
+			const message = document.createElement("p");
+			
+			// Check if text contains a URL
+			const url = /(?<= |^)([^ ]+:\/\/[^ ]+)(?= |$)/.exec(text);
+			if(url !== null) {
+			
+				// Create before link
+				const beforeLink = document.createElement("span");
+				beforeLink.textContent = text.substring(0, url.index);
+				
+				// Create link
+				const link = document.createElement("a");
+				link.textContent = url[0];
+				link.href = url[0];
+				link.target = "_blank";
+				link.style.wordBreak = "break-all";
+				
+				// Create after link
+				const afterLink = document.createElement("span");
+				afterLink.textContent = text.substring(url.index + url[0].length);
+				
+				// Add before link, link, and after link to message
+				message.appendChild(beforeLink);
+				message.appendChild(link);
+				message.appendChild(afterLink);
+			}
+			
+			// Otherwise
+			else {
+			
+				// Set message's text to the text
+				message.textContent = text;
+			}
+			
+			// Get if scrolled to bottom
+			const scrolledToBottom = window.innerHeight + window.scrollY - document.body.scrollHeight > -1;
+			
+			// Add message to page
+			document.body.appendChild(message);
+			
+			// Check if scrolled to bottom
+			if(scrolledToBottom === true) {
+			
+				// Scroll to bottom of page
+				window.scrollTo(0, document.body.scrollHeight);
+			}
+		};
+		
+		// Override JSON stringify
+		const originalJsonStringify = JSON.stringify;
+		JSON.stringify = (object) => {
+		
+			// Perform original JSON stringify on the object with its keys escaped
+			let result = originalJsonStringify(escapeKeys(object), (key, value) => {
+			
+				// Check if value is a BigInt
+				if(typeof value === "bigint") {
+				
+					// Return value surrounded by identifiers
+					return "!" + value.toString() + "!";
+				}
+				
+				// Otherwise check if value is a string
+				else if(typeof value === "string") {
+				
+					// Return value with identifiers escaped
+					return value.replaceAll("!", "!!");
+				}
+				
+				// Otherwise
+				else {
+				
+					// Return value
+					return value;
+				}
+			});
+			
+			// Check if result is a string
+			if(typeof result === "string") {
+			
+				// Remove identifiers and double quotes around BigInts from the result
+				result = result.replace(/((?<=^|:|\[)\s*)"!(\d+)!"(\s*(?=$|}|\]|,))/g, "$1$2$3").replace(/((?<=,)\s*)"!(\d+)!"(\s*(?=\]|,))/g, "$1$2$3");
+				
+				// Remove escaped identifiers from the result
+				result = result.replaceAll("!!", "!");
+			}
+			
+			// Return result
+			return result;
+		};
+		
+		// Override JSON parse
+		const originalJsonParse = JSON.parse;
+		JSON.parse = (text) => {
+		
+			// Check if text is a string
+			if(typeof text === "string") {
+			
+				// Escape identifiers in the text
+				text = text.replaceAll("!", "!!");
+				
+				// Add identifiers and double quotes around numbers in the text
+				text = text.replace(/((?<=^|:|\[)\s*)(\d+)(\s*(?=$|}|\]|,))/g, "$1\"!$2!\"$3").replace(/((?<=,)\s*)(\d+)(\s*(?=\]|,))/g, "$1\"!$2!\"$3");
+			}
+			
+			// Return performing original JSON parse on the object with the result's keys unescaped
+			return unescapeKeys(originalJsonParse(text, (key, value) => {
+			
+				// Check if value is a string
+				if(typeof value === "string") {
+				
+					// Check if value is a number surrounded by identifiers
+					const isNumber = /^!(\d+)!$/.exec(value);
+					if(isNumber !== null) {
+					
+						// Return value as a BigInt
+						return BigInt(isNumber[1]);
+					}
+					
+					// Otherwise
+					else {
+					
+						// Return value with its identifiers unescaped
+						return value.replaceAll("!!", "!");
+					}
+				}
+				
+				// Otherwise
+				else {
+				
+					// Return value
+					return value;
+				}
+			}));
+		};
+		
+		// Try
+		try {
+		
+			// Check if edge bits is invalid
+			if(Number.isInteger(EDGE_BITS) === false || EDGE_BITS < 10 || EDGE_BITS > 32) {
+			
+				// Throw exception
+				throw new Error("Edge bits is invalid");
+			}
+			
+			// Check if trimming rounds is invalid
+			if(Number.isInteger(TRIMMING_ROUNDS) === false || TRIMMING_ROUNDS < 1 || NUMBER_OF_EDGES / ((Math.floor((TRIMMING_ROUNDS + 1) / 2) + 1) * (Math.floor((TRIMMING_ROUNDS + 1) / 2) + 1) + 2) < SOLUTION_SIZE) {
+			
+				// Throw exception
+				throw new Error("Trimming rounds is invalid");
+			}
+			
+			// Check if trimming type is invalid
+			if(TRIMMING_TYPE !== "lean" && TRIMMING_TYPE !== "slean" && TRIMMING_TYPE !== "mean") {
+			
+				// Throw exception
+				throw new Error("Trimming type is invalid");
+			}
+			
+			// Check if request high performance GPU is invalid
+			if(typeof REQUEST_HIGH_PERFORMANCE_GPU !== "boolean") {
+			
+				// Throw exception
+				throw new Error("Request high performance GPU is invalid");
+			}
+			
+			// Check if initial job nonce is invalid
+			if(typeof INITIAL_JOB_NONCE !== "bigint" || INITIAL_JOB_NONCE < 0 || INITIAL_JOB_NONCE > UINT64_MAX) {
+			
+				// Throw exception
+				throw new Error("Initial job nonce is invalid");
+			}
+			
+			// Check if units max number of decimal numbers is invalid
+			if(Number.isInteger(UNITS_MAX_NUMBER_OF_DECIMAL_NUMBERS) === false || UNITS_MAX_NUMBER_OF_DECIMAL_NUMBERS < 0) {
+			
+				// Throw exception
+				throw new Error("Units max number of decimal numbers is invalid");
+			}
+			
+			// Check if stratum server address is invalid
+			if(typeof STRATUM_SERVER_ADDRESS !== "string" || (STRATUM_SERVER_ADDRESS.length !== 0 && STRATUM_SERVER_ADDRESS.startsWith("ws://") === false && STRATUM_SERVER_ADDRESS.startsWith("wss://") === false)) {
+			
+				// Throw exception
+				throw new Error("Stratum server address is invalid");
+			}
+			
+			// Check if stratum server username is invalid
+			if(typeof STRATUM_SERVER_USERNAME !== "string") {
+			
+				// Throw exception
+				throw new Error("Stratum server username is invalid");
+			}
+			
+			// Check if stratum server password is invalid
+			if(typeof STRATUM_SERVER_PASSWORD !== "string") {
+			
+				// Throw exception
+				throw new Error("Stratum server password is invalid");
+			}
+			
+			// Check if stratum server agent is invalid
+			if(typeof STRATUM_SERVER_AGENT !== "string") {
+			
+				// Throw exception
+				throw new Error("Stratum server agent is invalid");
+			}
+			
+			// Check if stratum server reconnect delay seconds is invalid
+			if(Number.isInteger(STRATUM_SERVER_RECONNECT_DELAY_SECONDS) === false || STRATUM_SERVER_RECONNECT_DELAY_SECONDS <= 0) {
+			
+				// Throw exception
+				throw new Error("Stratum server reconnect delay seconds is invalid");
+			}
+			
+			// Check if stratum server keep alive interval seconds is invalid
+			if(Number.isInteger(STRATUM_SERVER_KEEP_ALIVE_INTERVAL_SECONDS) === false || STRATUM_SERVER_KEEP_ALIVE_INTERVAL_SECONDS <= 0) {
+			
+				// Throw exception
+				throw new Error("Stratum server keep alive interval seconds is invalid");
+			}
+		}
+		
+		// Catch errors
+		catch(error) {
+		
+			// Log error's message
+			console.log(error.message);
+			
+			// Rethrow error
+			throw error;
+		}
+		
+		// Create newest node connections first partition and second partition
+		const newestNodeConnectionsFirstPartition = new Map();
+		const newestNodeConnectionsSecondPartition = new Map();
+		
+		// Create visited pairs first partition and second partition
+		const visitedNodePairsFirstPartition = new Map();
+		const visitedNodePairsSecondPartition = new Map();
+		
+		// Create node connections
+		const nodeConnections = new Array(MAX_NUMBER_OF_EDGES_AFTER_TRIMMING * 2);
+		for(let i = 0; i < nodeConnections.length; ++i) {
+		
+			nodeConnections[i] = new NodeConnection();
+		}
+		
+		// Create job header
+		const jobHeader = new Uint8Array(HEADER_SIZE);
+		
+		// Create job nonce
+		let jobNonce = INITIAL_JOB_NONCE;
+		
+		// Create job height
+		let jobHeight = 0n;
+		
+		// Create job ID
+		let jobId = 0n;
+		
+		// Create stratum server
+		let stratumServer;
+		
+		// Set reconnect to stratum server to true
+		let reconnectToStratumServer = true;
+		
+		// Window on DOM content loaded
+		window.addEventListener("DOMContentLoaded", async () => {
+		
+			// Try
+			try {
+			
+				// Display message
+				console.log("Performing the cuckatoo" + EDGE_BITS.toFixed() + " mining algorithm with " + TRIMMING_ROUNDS.toFixed() + " trimming round" + ((TRIMMING_ROUNDS !== 1) ? "s" : "") + " done with " + TRIMMING_TYPE + " trimming");
+				
+				// Check trimming type
+				switch(TRIMMING_TYPE) {
+				
+					// Lean
+					case "lean":
+					
+						// Create lean edge trimmer
+						var edgeTrimmer = new LeanTrimming();
+						
+						// Break
+						break;
+					
+					// Slean
+					case "slean":
+					
+						// Create slean edge trimmer
+						var edgeTrimmer = new SleanTrimming();
+						
+						// Break
+						break;
+					
+					// Mean
+					case "mean":
+					
+						// Create mean edge trimmer
+						var edgeTrimmer = new MeanTrimming();
+						
+						// Break
+						break;
+				}
+				
+				// Initialize edge trimmer
+				await edgeTrimmer.initialize();
+				
+				// Check if a stratum server address is provided
+				if(STRATUM_SERVER_ADDRESS.length !== 0) {
+				
+					// Get job from stratum server
+					await getJobFromStratumServer();
+				}
+				
+				// Display message
+				console.log("Running miner");
+				
+				// Loop forever while incrementing job nonce
+				const jobHeaderAndNonce = new Uint8Array(jobHeader.length + BigUint64Array.BYTES_PER_ELEMENT);
+				const nonceDataView = new DataView(jobHeaderAndNonce.buffer, jobHeader.length);
+				
+				for(;; jobNonce = (jobNonce + 1n) & UINT64_MAX) {
+				
+					// Get start time
+					const startTime = performance.now();
+					
+					// Get SipHash keys from job header and nonce
+					jobHeaderAndNonce.set(jobHeader);
+					nonceDataView.setBigUint64(0, jobNonce);
+					const sipHashKeys = Blake2b.compute(jobHeaderAndNonce);
+					
+					// Save current job nonce, current job height, job ID, and stratum server
+					const currentJobNonce = jobNonce;
+					const currentJobHeight = jobHeight;
+					const currentJobId = jobId;
+					const currentStratumServer = stratumServer;
+					
+					// Trim edges from the graph generated by the SipHash keys
+					const result = await edgeTrimmer.trimEdges(sipHashKeys);
+					
+					// Get number of remaining edges
+					const numberOfRemainingEdges = Math.min(result[0], MAX_NUMBER_OF_EDGES_AFTER_TRIMMING);
+					
+					// Reset newest node connections
+					newestNodeConnectionsFirstPartition.clear();
+					newestNodeConnectionsSecondPartition.clear();
+					
+					// Go through all remaining edges
+					for(let nodeConnectionsIndex = 0, edgesIndex = 1; nodeConnectionsIndex < numberOfRemainingEdges * 2; nodeConnectionsIndex += 2, edgesIndex += EDGE_NUMBER_OF_COMPONENTS) {
+					
+						// Get edge's index and nodes
+						const edgeIndex = result[edgesIndex];
+						const node = result[edgesIndex + 1];
+						const otherNode = result[edgesIndex + 2];
+						
+						// Add node connection to list for the node on the first partition
+						nodeConnections[nodeConnectionsIndex].previousNodeConnectionIndex = newestNodeConnectionsFirstPartition.get(node);
+						nodeConnections[nodeConnectionsIndex].node = node;
+						nodeConnections[nodeConnectionsIndex].edgeIndex = edgeIndex;
+						
+						// Replace newest node connection for the node on the first partition
+						newestNodeConnectionsFirstPartition.set(node, nodeConnectionsIndex);
+						
+						// Add node connection to list for the node on the second partition
+						nodeConnections[nodeConnectionsIndex + 1].previousNodeConnectionIndex = newestNodeConnectionsSecondPartition.get(otherNode);
+						nodeConnections[nodeConnectionsIndex + 1].node = otherNode;
+						nodeConnections[nodeConnectionsIndex + 1].edgeIndex = edgeIndex;
+						
+						// Replace newest node connection for the node on the second partition
+						newestNodeConnectionsSecondPartition.set(otherNode, nodeConnectionsIndex + 1);
+						
+						// Check if both nodes have a pair
+						if(newestNodeConnectionsFirstPartition.has((node ^ 1) >>> 0) === true && newestNodeConnectionsSecondPartition.has((otherNode ^ 1) >>> 0) === true) {
+						
+							// Reset visited node pairs
+							visitedNodePairsFirstPartition.clear();
+							visitedNodePairsSecondPartition.clear();
+							
+							// Check if a solution was found at the node's pair
+							if(searchNodeForSolution(0, edgeIndex, (node ^ 1) >>> 0, otherNode) === true) {
+							
+								// Check if stratum server wasn't disconnected and is ready
+								if(stratumServer === currentStratumServer && stratumServer instanceof WebSocket === true && stratumServer.readyState === WebSocket.OPEN) {
+								
+									// Display message
+									console.log("Submitting a solution to the stratum server");
+									
+									// Get solution as the index of the visited nodes
+									const solution = Array.from(visitedNodePairsFirstPartition.values()).concat(Array.from(visitedNodePairsSecondPartition.values())).sort((a, b) => a - b);
+									
+									// Create submit request
+									const submitRequest = {
+									
+										// ID
+										id: "1",
+										
+										// JSON-RPC
+										jsonrpc: "2.0",
+										
+										// Method
+										method: "submit",
+										
+										// Parameters
+										params: {
+										
+											// Edge bits
+											edge_bits: EDGE_BITS,
+											
+											// Height
+											height: currentJobHeight,
+											
+											// Job ID
+											job_id: currentJobId,
+											
+											// Nonce
+											nonce: currentJobNonce,
+											
+											// Proof of work
+											pow: solution
+										}
+									};
+									
+									// Perform original console log
+									originalConsoleLog(submitRequest);
+									
+									// Send submit request to stratum server
+									stratumServer.send(JSON.stringify(submitRequest) + "\n");
+								}
+								
+								// Break
+								break;
+							}
+						}
+					}
+					
+					// Get end time
+					const endTime = performance.now();
+					
+					// Display message
+					console.log("Mining rate is " + (Math.floor((MILLISECONDS_IN_A_SECOND / (endTime - startTime)) * Math.pow(10, UNITS_MAX_NUMBER_OF_DECIMAL_NUMBERS)) / Math.pow(10, UNITS_MAX_NUMBER_OF_DECIMAL_NUMBERS)).toFixed(UNITS_MAX_NUMBER_OF_DECIMAL_NUMBERS).replace(/\.0*$/, "") + " g/s");
+				}
+			}
+			
+			// Catch errors
+			catch(error) {
+			
+				// Log error's message
+				console.log(error.message);
+				
+				// Set reconnect to stratum server to false
+				reconnectToStratumServer = false;
+				
+				// Check if stratum server exists
+				if(stratumServer instanceof WebSocket === true) {
+				
+					// Close stratum server
+					stratumServer.close();
+				}
+				
+				// Rethrow error
+				throw error;
+			}
+		});
+		
+		
+		// Supporting function implementation
+		
+		// Search node for solution
+		function searchNodeForSolution(cycleSize, edgeIndex, node, startingOtherNode) {
+		
+			// Check if node is in the first partition
+			if(cycleSize % 2 === 0) {
+			
+				// Check if node pair wasn't already visited
+				if(visitedNodePairsFirstPartition.has(node >>> 1) === false) {
+				
+					// Set that node pair has been visited
+					visitedNodePairsFirstPartition.set(node >>> 1, edgeIndex);
+					
+					// Go through all of the node's connections
+					for(let nodeConnectionIndex = newestNodeConnectionsFirstPartition.get(node); nodeConnectionIndex !== undefined; nodeConnectionIndex = nodeConnections[nodeConnectionIndex].previousNodeConnectionIndex) {
+					
+						// Check if the connected node has a pair
+						if(newestNodeConnectionsSecondPartition.has((nodeConnections[nodeConnectionIndex + 1].node ^ 1) >>> 0) === true) {
+						
+							// Check if a solution was found at the connected node's pair
+							if(searchNodeForSolution(cycleSize + 1, nodeConnections[nodeConnectionIndex + 1].edgeIndex, (nodeConnections[nodeConnectionIndex + 1].node ^ 1) >>> 0, startingOtherNode) === true) {
+							
+								// Return true
+								return true;
+							}
+						}
+					}
+					
+					// Set that node pair hasn't been visited
+					visitedNodePairsFirstPartition.delete(node >>> 1);
+				}
+			}
+			
+			// Otherwise
+			else {
+			
+				// Check if node pair wasn't already visited
+				if(visitedNodePairsSecondPartition.has(node >>> 1) === false) {
+				
+					// Set that node pair has been visited
+					visitedNodePairsSecondPartition.set(node >>> 1, edgeIndex);
+					
+					// Check if cycle is complete
+					if(node === startingOtherNode) {
+					
+						// Check if cycle is a solution
+						if(cycleSize === SOLUTION_SIZE - 1) {
+						
+							// Return true
+							return true;
+						}
+					}
+					
+					// Otherwise check if cycle could be a solution
+					else if(cycleSize !== SOLUTION_SIZE - 1) {
+					
+						// Go through all of the node's connections
+						for(let nodeConnectionIndex = newestNodeConnectionsSecondPartition.get(node); nodeConnectionIndex !== undefined; nodeConnectionIndex = nodeConnections[nodeConnectionIndex].previousNodeConnectionIndex) {
+						
+							// Check if the connected node has a pair
+							if(newestNodeConnectionsFirstPartition.has((nodeConnections[nodeConnectionIndex - 1].node ^ 1) >>> 0) === true) {
+							
+								// Check if a solution was found at the connected node's pair
+								if(searchNodeForSolution(cycleSize + 1, nodeConnections[nodeConnectionIndex - 1].edgeIndex, (nodeConnections[nodeConnectionIndex - 1].node ^ 1) >>> 0, startingOtherNode) === true) {
+								
+									// Return true
+									return true;
+								}
+							}
+						}
+					}
+					
+					// Set that node pair hasn't been visited
+					visitedNodePairsSecondPartition.delete(node >>> 1);
+				}
+			}
+			
+			// Return false
+			return false;
+		}
+		
+		// Get job from stratum server
+		function getJobFromStratumServer() {
+		
+			// Return promise
+			return new Promise((resolve) => {
+			
+				// Set connect to stratum server
+				let firstConnect = true;
+				const connectToStratumServer = () => {
+				
+					// Check if reconnecting to the stratum server
+					if(reconnectToStratumServer === true) {
+					
+						// Display message
+						console.log("Trying to connect to the stratum server at " + STRATUM_SERVER_ADDRESS);
+						
+						// Connect to stratum server
+						stratumServer = new WebSocket(STRATUM_SERVER_ADDRESS);
+						stratumServer.binaryType = "arraybuffer";
+						
+						// Stratum server on open
+						let didConnect = false;
+						let loggedIn = false;
+						let keepAliveInterval;
+						let receivedJob = false;
+						
+						stratumServer.onopen = () => {
+						
+							// Set did connect to true
+							didConnect = true;
+							
+							// Display message
+							console.log("Connected to the stratum server");
+							
+							// Check if first connect
+							if(firstConnect === true) {
+							
+								// Clear first connect
+								firstConnect = false;
+								
+								// Display message
+								console.log("You can view all the stratum server communication in your browser's console");
+							}
+							
+							// Display message
+							console.log("Logging into the stratum server with username " + STRATUM_SERVER_USERNAME);
+							
+							// Create login request
+							const loginRequest = {
+							
+								// ID
+								id: "1",
+								
+								// JSON-RPC
+								jsonrpc: "2.0",
+								
+								// Method
+								method: "login",
+								
+								// Parameters
+								params: {
+								
+									// Username
+									login: STRATUM_SERVER_USERNAME,
+									
+									// Password
+									pass: STRATUM_SERVER_PASSWORD,
+									
+									// Agent
+									agent: STRATUM_SERVER_AGENT
+								}	
+							};
+							
+							// Perform original console log
+							originalConsoleLog(loginRequest);
+							
+							// Send login request to stratum server
+							stratumServer.send(JSON.stringify(loginRequest) + "\n");
+						};
+						
+						// Stratum server on message
+						stratumServer.onmessage = (event) => {
+						
+							// Try
+							try {
+							
+								// Get message's text
+								const text = (event.data instanceof ArrayBuffer === true) ? new TextDecoder("utf-8", {
+								
+									// Fatal
+									fatal: true
+									
+								}).decode(event.data) : event.data;
+								
+								// Try
+								try {
+								
+									// Parse message's text
+									var message = JSON.parse(text);
+								}
+								
+								// Catch errors
+								catch(error) {
+								
+									// Perform original console log
+									originalConsoleLog(text);
+									
+									// Display message
+									console.log("Received an invalid message from the stratum server");
+									
+									// Close stratum server
+									stratumServer.close();
+									
+									// Return
+									return;
+								}
+							}
+							
+							// Catch errors
+							catch(error) {
+							
+								// Display message
+								console.log("Received an invalid message from the stratum server");
+								
+								// Close stratum server
+								stratumServer.close();
+								
+								// Return
+								return;
+							}
+							
+							// Perform original console log
+							originalConsoleLog(message);
+							
+							// Check if message is invalid
+							if(typeof message !== "object" || message === null || "method" in message === false || typeof message.method !== "string") {
+							
+								// Display message
+								console.log("Received an invalid message from the stratum server");
+								
+								// Close stratum server
+								stratumServer.close();
+							}
+							
+							// Otherwise
+							else {
+							
+								// Check message's method
+								switch(message.method) {
+								
+									// Login
+									case "login":
+									
+										// Check if logged in
+										if(loggedIn === true) {
+										
+											// Display message
+											console.log("Received an invalid message from the stratum server");
+											
+											// Close stratum server
+											stratumServer.close();
+										}
+										
+										// Otherwise check if logging in failed
+										else if("result" in message === false || message.result !== "ok") {
+										
+											// Check if message includes a message
+											if("error" in message === true && typeof message.error === "object" && message.error !== null && "message" in message.error === true && typeof message.error.message === "string" && message.error.message.length !== 0) {
+											
+												// Display message
+												console.log("Logging into the stratum server failed for the following reason: " + message.error.message);
+											}
+											
+											// Otherwise
+											else {
+											
+												// Display message
+												console.log("Logging into the stratum server failed");
+											}
+											
+											// Close stratum server
+											stratumServer.close();
+										}
+										
+										// Otherwise
+										else {
+										
+											// Set logged in
+											loggedIn = true;
+											
+											// Set keep alive interval
+											keepAliveInterval = setInterval(() => {
+											
+												// Check if stratum server is ready
+												if(stratumServer.readyState === WebSocket.OPEN) {
+												
+													// Create keep alive request
+													const keepAliveRequest = {
+													
+														// ID
+														id: "1",
+														
+														// JSON-RPC
+														jsonrpc: "2.0",
+														
+														// Method
+														method: "keepalive",
+														
+														// Parameters
+														params: null
+													};
+													
+													// Perform original console log
+													originalConsoleLog(keepAliveRequest);
+													
+													// Send keep alive request to stratum server
+													stratumServer.send(JSON.stringify(keepAliveRequest) + "\n");
+												}
+												
+											}, STRATUM_SERVER_KEEP_ALIVE_INTERVAL_SECONDS * MILLISECONDS_IN_A_SECOND);
+											
+											// Display message
+											console.log("Logged into the stratum server");
+											
+											// Display message
+											console.log("Requesting a job from the stratum server");
+											
+											// Create get job template request
+											const getJobTemplateRequest = {
+											
+												// ID
+												id: "1",
+												
+												// JSON-RPC
+												jsonrpc: "2.0",
+												
+												// Method
+												method: "getjobtemplate",
+												
+												// Parameters
+												params: null
+											};
+											
+											// Perform original console log
+											originalConsoleLog(getJobTemplateRequest);
+											
+											// Send get job template request to stratum server
+											stratumServer.send(JSON.stringify(getJobTemplateRequest) + "\n");
+										}
+										
+										// Break
+										break;
+									
+									// Get job template or job
+									case "getjobtemplate":
+									case "job":
+									
+										// Check if logged in and message is a get job template response or a job has already been received
+										if(loggedIn === true && (message.method === "getjobtemplate" || receivedJob === true)) {
+										
+											// Check if message doesn't contain job info
+											if((message.method === "getjobtemplate" && "result" in message === false) || (message.method === "job" && "params" in message === false)) {
+											
+												// Display message
+												console.log("Received an invalid message from the stratum server");
+												
+												// Close stratum server
+												stratumServer.close();
+											}
+											
+											// Otherwise
+											else {
+											
+												// Check if job info is invalid
+												const jobInfo = (message.method === "getjobtemplate") ? message.result : message.params;
+												if(typeof jobInfo !== "object" || jobInfo === null || "height" in jobInfo === false || typeof jobInfo.height !== "bigint" || jobInfo.height <= 0n || jobInfo.height > UINT64_MAX || "job_id" in jobInfo === false || typeof jobInfo.job_id !== "bigint" || jobInfo.job_id < 0n || jobInfo.job_id > UINT64_MAX || "pre_pow" in jobInfo === false || typeof jobInfo.pre_pow !== "string" || jobInfo.pre_pow.length !== HEADER_SIZE * "FF".length || /^[0-9a-f]+$/i.test(jobInfo.pre_pow) === false) {
+												
+													// Check if message is a get job template response
+													if(message.method === "getjobtemplate") {
+													
+														// Check if message includes a message
+														if("error" in message === true && typeof message.error === "object" && message.error !== null && "message" in message.error === true && typeof message.error.message === "string" && message.error.message.length !== 0) {
+														
+															// Display message
+															console.log("Getting a job from the stratum server failed for the following reason: " + message.error.message);
+														}
+														
+														// Otherwise
+														else {
+														
+															// Display message
+															console.log("Getting a job from the stratum server failed");
+														}
+													}
+													
+													// Otherwise
+													else {
+													
+														// Display message
+														console.log("Received an invalid message from the stratum server");
+													}
+													
+													// Close stratum server
+													stratumServer.close();
+												}
+												
+												// Otherwise
+												else {
+												
+													// Set received job
+													receivedJob = true;
+													
+													// Set job header to the job info's pre-proof of work
+													jobHeader.set(Uint8Array.fromHex(jobInfo.pre_pow));
+													
+													// Set job nonce to a random value
+													jobNonce = BigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
+													
+													// Set job height to the job info's height
+													jobHeight = jobInfo.height;
+													
+													// Set job ID to the job info's ID
+													jobId = jobInfo.job_id;
+													
+													// Check if message is a get job template response
+													if(message.method === "getjobtemplate") {
+													
+														// Display message
+														console.log("Received a job from the stratum server");
+													}
+													
+													// Otherwise
+													else {
+													
+														// Display message
+														console.log("Received a new job from the stratum server");
+													}
+													
+													// Resolve
+													resolve();
+												}
+											}
+										}
+										
+										// Break
+										break;
+									
+									// Submit
+									case "submit":
+									
+										// Check if submitting solution failed
+										if("result" in message === false || typeof message.result !== "string") {
+										
+											// Check if message includes a message
+											if("error" in message === true && typeof message.error === "object" && message.error !== null && "message" in message.error === true && typeof message.error.message === "string" && message.error.message.length !== 0) {
+											
+												// Display message
+												console.log("The solution was rejected by the stratum server for the following reason: " + message.error.message);
+											}
+											
+											// Otherwise
+											else {
+											
+												// Display message
+												console.log("The solution was rejected by the stratum server");
+											}
+										}
+										
+										// Otherwise
+										else {
+										
+											// Check if message's result isn't empty
+											if(message.result.length !== 0) {
+											
+												// Display message
+												console.log("The solution was accepted by the stratum server: " + message.result);
+											}
+											
+											// Otherwise
+											else {
+											
+												// Display message
+												console.log("The solution was accepted by the stratum server");
+											}
+										}
+										
+										// Break
+										break;
+								}
+							}
+						};
+						
+						// Stratum server on close
+						stratumServer.onclose = () => {
+						
+							// Check if logged in
+							if(loggedIn === true) {
+							
+								// Clear keep alive interval
+								clearInterval(keepAliveInterval);
+							}
+							
+							// Display message
+							console.log((didConnect === false) ? "Connecting to the stratum server failed" : "Disconnected from the stratum server");
+							
+							// Reconnect to stratum server
+							setTimeout(connectToStratumServer, STRATUM_SERVER_RECONNECT_DELAY_SECONDS * MILLISECONDS_IN_A_SECOND);
+						};
+						
+						// Stratum server on error
+						stratumServer.onerror = () => {
+						
+							// Close stratum server
+							stratumServer.close();
+						};
+					}
+				};
+				
+				// Connect to stratum server
+				connectToStratumServer();
+			});
+		}
+		
+		// Escape keys
+		function escapeKeys(object) {
+		
+			// Check if object is an object
+			if(typeof object === "object" && object !== null) {
+			
+				// Create copy
+				const copy = (Array.isArray(object) === true) ? [] : {};
+				
+				// Go through all keys in the object
+				for(const key in object) {
+				
+					if(object.hasOwnProperty(key) === true) {
+					
+						// Set copy's value with a key with its identifiers escaped
+						copy[key.replaceAll("!", "!!")] = escapeKeys(object[key]);
+					}
+				}
+				
+				// Return copy
+				return copy;
+			}
+			
+			// Otherwise
+			else {
+			
+				// Return object
+				return object;
+			}
+		}
+		
+		// Unescape keys
+		function unescapeKeys(object) {
+		
+			// Check if object is an object
+			if(typeof object === "object" && object !== null) {
+			
+				// Create copy
+				const copy = (Array.isArray(object) === true) ? [] : {};
+				
+				// Go through all keys in the object
+				for(const key in object) {
+				
+					if(object.hasOwnProperty(key) === true) {
+					
+						// Set copy's value with a key with its identifiers unescaped
+						copy[key.replaceAll("!!", "!")] = unescapeKeys(object[key]);
+					}
+				}
+				
+				// Return copy
+				return copy;
+			}
+			
+			// Otherwise
+			else {
+			
+				// Return object
+				return object;
+			}
+		}
+	</script>
+	<script src="lean_trimming.js"></script>
+	<script src="slean_trimming.js"></script>
+	<script src="mean_trimming.js"></script>
+</body>
+</html>

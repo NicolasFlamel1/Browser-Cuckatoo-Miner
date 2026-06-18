@@ -23,21 +23,21 @@ try {
 	if(Number.isInteger(LEAN_TRIMMING_NUMBER_OF_EDGES_PER_STEP_ONE_WORK_ITEM) === false || Math.log2(LEAN_TRIMMING_NUMBER_OF_EDGES_PER_STEP_ONE_WORK_ITEM) % 1 !== 0 || LEAN_TRIMMING_NUMBER_OF_EDGES_PER_STEP_ONE_WORK_ITEM > NUMBER_OF_EDGES || NUMBER_OF_EDGES / LEAN_TRIMMING_NUMBER_OF_EDGES_PER_STEP_ONE_WORK_ITEM > UINT32_MAX || LEAN_TRIMMING_NUMBER_OF_EDGES_PER_STEP_ONE_WORK_ITEM > UINT32_MAX) {
 	
 		// Throw exception
-		throw new Error("Trimming number of edges per step one work item is invalid");
+		throw new Error("Lean trimming number of edges per step one work item is invalid");
 	}
 	
 	// Check if lean trimming number of parts per step is invalid
 	if(Number.isInteger(LEAN_TRIMMING_NUMBER_OF_PARTS_PER_STEP) === false || Math.log2(LEAN_TRIMMING_NUMBER_OF_PARTS_PER_STEP) % 1 !== 0 || LEAN_TRIMMING_NUMBER_OF_PARTS_PER_STEP > NUMBER_OF_EDGES / LEAN_TRIMMING_NUMBER_OF_EDGES_PER_STEP_ONE_WORK_ITEM || LEAN_TRIMMING_NUMBER_OF_PARTS_PER_STEP > NUMBER_OF_EDGES / (Uint32Array.BYTES_PER_ELEMENT * BITS_IN_A_BYTE)) {
 	
 		// Throw exception
-		throw new Error("Trimming number of edges per step one work item is invalid");
+		throw new Error("Lean trimming number of parts per step is invalid");
 	}
 	
 	// Check if lean trimming number step parts before waiting is invalid
 	if(Number.isInteger(LEAN_TRIMMING_NUMBER_OF_STEP_PARTS_BEFORE_WAITING) === false || LEAN_TRIMMING_NUMBER_OF_STEP_PARTS_BEFORE_WAITING < 0 || (LEAN_TRIMMING_NUMBER_OF_STEP_PARTS_BEFORE_WAITING !== 0 && LEAN_TRIMMING_NUMBER_OF_PARTS_PER_STEP % LEAN_TRIMMING_NUMBER_OF_STEP_PARTS_BEFORE_WAITING !== 0)) {
 	
 		// Throw exception
-		throw new Error("Trimming number of edges per step one work item is invalid");
+		throw new Error("Lean trimming number step parts before waiting is invalid");
 	}
 	
 	// Check if trimming rounds is invalid
@@ -77,7 +77,7 @@ class LeanTrimming {
 			}
 			
 			// Display message
-			console.log("Requesting " + ((REQUEST_HIGH_PERFORMANCE_GPU === true) ? "high performance" : "low power") + " adapter");
+			console.log("Requesting a " + ((REQUEST_HIGH_PERFORMANCE_GPU === true) ? "high performance" : "low power") + " adapter");
 			
 			// Request adapter
 			const adapter = await navigator.gpu.requestAdapter({
@@ -97,7 +97,7 @@ class LeanTrimming {
 			}
 			
 			// Display message
-			console.log("Got " + ((adapter.info.vendor === "") ? "" : adapter.info.vendor + " ") + "adapter");
+			console.log("Got " + ((adapter.info.vendor.length === 0) ? "an" : (((/^[aeio]/.test(adapter.info.vendor) === true) ? "an " : "a ") + adapter.info.vendor)) + " adapter");
 			
 			// Check if not using a mobile browser
 			if(IS_MOBILE === false) {
@@ -118,7 +118,7 @@ class LeanTrimming {
 			}
 			
 			// Display message
-			console.log("Requesting device");
+			console.log("Requesting a device");
 			
 			// Request device
 			this.#device = await adapter.requestDevice({
@@ -138,13 +138,13 @@ class LeanTrimming {
 			});
 			
 			// Display message
-			console.log("Got device");
+			console.log("Got a device");
 			
 			// Set on device lost
 			this.#device.lost.then((info) => {
 			
 				// Display message
-				console.log("Device was lost: " + info.message);
+				console.log("The device was lost for the following reason: " + info.message);
 			});
 			
 			// Set total number of work items based on the kernels and number of parts per step
@@ -219,7 +219,7 @@ class LeanTrimming {
 			}
 			
 			// Display message
-			console.log("Creating shader module");
+			console.log("Creating a shader module");
 			
 			// Create shader module
 			const shaderModule = this.#device.createShaderModule({
@@ -271,11 +271,11 @@ class LeanTrimming {
 			if(compilationMessages.length !== 0) {
 			
 				// Throw compilation messages
-				throw new Error(compilationMessages.join("\n"));
+				throw new Error("Compiling the shader module failed for the following reason: " + compilationMessages.join(", "));
 			}
 			
 			// Display message
-			console.log("Created shader module");
+			console.log("Created a shader module");
 			
 			// Display message
 			console.log("Creating pipelines");
